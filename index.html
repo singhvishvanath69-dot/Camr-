@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>एडवांस्ड स्मार्ट कैमरा ऐप</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h2 { margin-bottom: 10px; color: #00ffcc; text-align: center; }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            background: #000;
+        }
+
+        video, img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* फ्लैश इफ़ेक्ट */
+        .flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+        .flash.active { opacity: 1; }
+
+        .controls, .sliders {
+            width: 100%;
+            max-width: 450px;
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button, select {
+            padding: 10px 15px;
+            font-size: 15px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-primary { background: #00ffcc; color: #000; }
+        .btn-primary:hover { background: #00b386; }
+        
+        .btn-secondary { background: #333; color: #fff; border: 1px solid #555; }
+        .btn-secondary:hover { background: #444; }
+
+        select { background: #222; color: #fff; border: 1px solid #555; }
+
+        .slider-group {
+            width: 100%;
+            max-width: 450px;
+            background: #1e1e1e;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+            box-sizing: border-box;
+        }
+        .slider-group label { display: block; font-size: 14px; margin-bottom: 5px; color: #ccc; }
+        .slider-group input { width: 100%; cursor: pointer; }
+
+        #preview-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .preview-box {
+            width: 100%;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid #00ffcc;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>📸 एडवांस्ड स्मार्ट कैमरा ऐप</h2>
+    
+    <div class="camera-container">
+        <video id="video" autoplay playsinline></video>
+        <div id="flashEffect" class="flash"></div>
+    </div>
+
+    <!-- फिल्टर्स और कैमरा स्विच कंट्रोल्स -->
+    <div class="controls">
+        <select id="filterSelect" onchange="applyFilter()">
+            <option value="none">नॉर्मल (Normal)</option>
+            <option value="grayscale(100%)">ब्लैक एंड व्हाइट</option>
+            <option value="sepia(100%)">विंटेज (Sepia)</option>
+            <option value="invert(100%)">उल्टा रंग (Invert)</option>
+            <option value="contrast(150%)">हाई कंट्रास्ट</option>
+        </select>
+        <button class="btn-secondary" onclick="switchCamera()">🔄 कैमरा बदलें</button>
+    </div>
+
+    <!-- ब्राइटनेस और कंट्रास्ट स्लाइडर्स -->
+    <div class="slider-group">
+        <label>ब्राइटनेस (Brightness): <span id="brightVal">100</span>%</label>
+        <input type="range" id="brightnessRange" min="50" max="200" value="100" oninput="updateSliders()">
+        
+        <label style="margin-top: 8px;">कंट्रास्ट (Contrast): <span id="contrastVal">100</span>%</label>
+        <input type="range" id="contrastRange" min="50" max="200" value="100" oninput="updateSliders()">
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" style="width: 100%; font-size: 18px;" onclick="takeSnapshot()">🔴 फोटो खींचें</button>
+    </div>
+
+    <!-- फोटो प्रिव्यू और डाउनलोड सेक्शन -->
+    <div id="preview-section">
+        <h3>खींची गई फोटो:</h3>
+        <div class="preview-box">
+            <img id="photo" alt="Captured Photo">
+        </div>
+        <div class="controls" style="margin-top: 15px;">
+            <a id="downloadBtn" download="my-photo.png" style="text-decoration: none; width: 100%;">
+                <button class="btn-primary" style="width: 100%;">📥 गैलरी में डाउनलोड करें</button>
+            </a>
+            <button class="btn-secondary" style="width: 100%; margin-top: 5px;" onclick="retakePhoto()">🔄 दोबारा खींचें</button>
+        </div>
+    </div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photo = document.getElementById('photo');
+        const previewSection = document.getElementById('preview-section');
+        const flashEffect = document.getElementById('flashEffect');
+        const filterSelect = document.getElementById('filterSelect');
+        const brightnessRange = document.getElementById('brightnessRange');
+        const contrastRange = document.getElementById('contrastRange');
+        
+        let currentFacingMode = 'environment'; // शुरू में बैक कैमरा
+        let currentStream = null;
+
+        // कैमरा शुरू करने का फंक्शन
+        async function initCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                video: { facingMode: currentFacingMode }
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (err) {
+                alert("कैमरा एक्सेस नहीं मिला या परमिशन ब्लॉक है: " + err);
+            }
+        }
+
+        // आगे और पीछे का कैमरा बदलने का फंक्शन
+        function switchCamera() {
+            currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+            initCamera();
+        }
+
+        // फिल्टर्स अप्लाई करना
+        function applyFilter() {
+            updateVideoStyle();
+        }
+
+        // स्लाइडर्स (Brightness & Contrast) अपडेट करना
+        function updateSliders() {
+            document.getElementById('brightVal').innerText = brightnessRange.value;
+            document.getElementById('contrastVal').innerText = contrastRange.value;
+            updateVideoStyle();
+        }
+
+        function updateVideoStyle() {
+            let filterVal = filterSelect.value;
+            if (filterVal === 'none') filterVal = '';
+            
+            video.style.filter = `${filterVal} brightness(${brightnessRange.value}%) contrast(${contrastRange.value}%)`;
+        }
+
+        // फोटो कैप्चर करना
+        function takeSnapshot() {
+            // फ्लैश एनिमेशन दिखाना
+            flashEffect.classList.add('active');
+            setTimeout(() => flashEffect.classList.remove('active'), 200);
+
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+
+            // वीडियो पर लगे सभी फिल्टर्स को कैनवास पर भी कॉपी करना
+            ctx.filter = window.getComputedStyle(video).filter;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // इमेज डेटा तैयार करना
+            const dataURL = canvas.toDataURL('image/png');
+            photo.src = dataURL;
+            document.getElementById('downloadBtn').href = dataURL;
+
+            // कैमरा छिपाकर प्रिव्यू दिखाना
+            document.querySelector('.camera-container').style.display = 'none';
+            document.querySelector('.controls').style.display = 'none';
+            document.querySelector('.slider-group').style.display = 'none';
+            previewSection.style.display = 'flex';
+        }
+
+        // दोबारा फोटो खींचने के लिए वापस जाना
+        function retakePhoto() {
+            previewSection.style.display = 'none';
+            document.querySelector('.camera-container').style.display = 'block';
+            document.querySelector('.controls').style.display = 'flex';
+            document.querySelector('.slider-group').style.display = 'block';
+        }
+
+        // ऐप लोड होने पर कैमरा चालू करें
+        initCamera();
+    </script>
+</body>
+</html>
